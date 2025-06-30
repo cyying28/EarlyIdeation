@@ -1,0 +1,23 @@
+# Core dependencies for AI review analysis system
+requests>=2.31.0
+python-dotenv>=1.0.0
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# AI and ML dependencies
+openai>=1.0.0
+cohere>=4.0.0
+
+# Vector database
+qdrant-client>=1.6.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Optional: For ABSA functionality (currently not used in main flow)
+# pyabsa>=2.0.0
+
+# Optional: For enhanced text processing
+# nltk>=3.8.0
+# spacy>=3.6.0 
