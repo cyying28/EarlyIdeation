@@ -53,28 +53,28 @@ class LlmQLoRA:
         self.peft_model = None
         self.peft_trainer = None
     
-    def format_prompt(self, prompt: dict):
+    def format_prompts(self, samples: list[dict]):
         """
         Format fields of sample ('instruction', 'output') and format them as string.
-        May need a very large context window because of this part.
+        Adds to the sample 
         """
         INTRO_BLURB = "Below is an instruction that describes a task. Write a response that appropriately completes the request."
         INSTRUCTION_KEY = "### Instruct: Generate a math modeling solution for the below question."
         RESPONSE_KEY = "### Output:"
         END_KEY = "### End"
-        
         blurb = f"\n{INTRO_BLURB}"
         instruction = f"{INSTRUCTION_KEY}"
-        input_context = f"{sample['problem']}" if sample["problem"] else None
-        response = f"{RESPONSE_KEY}\n{sample['solution']}"
         end = f"{END_KEY}"
         
-        parts = [part for part in [blurb, instruction, input_context, response, end] if part]
+        for sample in samples:
+            input_context = f"{sample['problem']}" if sample["problem"] else None
+            response = f"{RESPONSE_KEY}\n{sample['solution']}"
+            parts = [part for part in [blurb, instruction, input_context, response, end] if part]
 
-        formatted_prompt = "\n\n".join(parts)
-        sample["text"] = formatted_prompt
+            formatted_prompt = "\n\n".join(parts)
+            sample["instruction"] = formatted_prompt
 
-        return sample
+        return samples
     
     def prompt_llm(self, text: str):
         """
@@ -120,7 +120,7 @@ class LlmQLoRA:
         """
         
         peft_training_args = TrainingArguments(
-            output_dir=training_dir,
+            output_dir=output_dir,
             warmup_steps=1,
             # Less memory but longer (best for 1 GPU)
             num_train_epochs=3,
