@@ -11,6 +11,7 @@ from transformers import (
     pipeline
 )
 from datasets import Dataset
+from dotenv import load_dotenv
 
 class LlmQLoRA:
     """
@@ -24,6 +25,8 @@ class LlmQLoRA:
         self.device_map = "auto" if self.use_cuda else "cpu"
         self.device = 0 if self.use_cuda else -1
         self.model_name = model_name
+        load_dotenv()
+        self.auth_token = os.getenv("HF_AUTH_TOKEN")
 
         compute_dtype = torch.float16 if self.use_cuda else torch.float32
 
@@ -40,7 +43,8 @@ class LlmQLoRA:
             device_map=self.device_map,
             quantization_config=self.bnb_config,
             trust_remote_code=True,
-            use_auth_token=True
+            use_auth_token=True,
+            token=auth_token
         )
 
         # Load tokenizer
@@ -48,10 +52,13 @@ class LlmQLoRA:
             model,
             trust_remote_code=True,
             padding_side="left",
-            add_eos_token=True,
-            add_bos_token=True,
-            use_fast=False
+            use_fast=False,
+            token=auth_token
         )
+
+        # Set BOS and EOS tokens manually
+        self.tokenizer.add_eos_token = True
+        self.tokenizer.add_bos_token = True
 
         self.peft_model = None
         self.peft_trainer = None
