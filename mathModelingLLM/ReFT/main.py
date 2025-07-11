@@ -33,7 +33,7 @@ class DataLoader:
         return filtered_data
 
 if __name__ == "__main__":
-    json_path = "your_dataset.json" 
+    json_path = "mathModelingLLM/sciteProcessing/jsons/processed_papers_with_chatgpt.json" 
     output_dir = "./qlora-finetuned"
     model_name = "mistralai/Mistral-7B-Instruct-v0.1"
 
