@@ -37,12 +37,3 @@ class Reward:
         
         # 2. Linguistic appeal/correctness
         
-        
-    @staticmethod
-    def eval_creativity(prompt: str, resp: str):
-        
-    @staticmethod
-    def eval_model(prompt: str, resp: str):
-        
-    @staticmethod
-    def eval_reasoning(prompt: str, resp: str):

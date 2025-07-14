@@ -12,7 +12,7 @@ from datasets import load_dataset
 from trl import PPOTrainer, PPOConfig
 from sentence_transformers import SentenceTransformer
 import numpy as np
-import pandas as import pd
+import pandas as pd
 import numpy as np
 
 class LlmPPO:

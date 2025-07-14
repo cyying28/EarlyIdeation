@@ -9,7 +9,7 @@ class DataLoader:
     # Structure of JSON: problem statement, solution, citations
     @staticmethod
     def load_json(json_path: str):
-        required_keys = {'problem', 'solution', 'metadata'}
+        required_keys = {'problem', 'solution', 'citations'}
         with open(json_path, 'r') as file:
             raw_data = json.load(file)
 
@@ -27,19 +27,19 @@ class DataLoader:
             filtered_data.append({
                 "problem": item[keys_map.get("problem")],
                 "solution": item[keys_map.get("solution")],
-                "metadata": item[keys_map.get("metadata")],
+                "citations": item[keys_map.get("citations")],
             })
 
         return filtered_data
 
 if __name__ == "__main__":
-    json_path = "mathModelingLLM/sciteProcessing/jsons/processed_papers_with_chatgpt.json" 
+    json_path = "/Users/curtisying/Desktop/Coding/Side Projects/EarlyIdeation/mathModelingLLM/sciteProcessing/jsons/prob_sol_done.json"
     output_dir = "./qlora-finetuned"
-    model_name = "mistralai/Mistral-7B-Instruct-v0.1"
+    model_hf = "mistralai/Mistral-7B-Instruct-v0.1"
 
     # Load and preprocess data
     data = DataLoader.load_json(json_path)
-    llm = LlmQLoRA(model=model_name, model_name="Mistral7B")
+    llm = LlmQLoRA(model=model_hf, model_name="Mistral7B")
 
     # Format prompts with problem and solution into instruction/response style text
     formatted_samples = llm.format_prompts(data)

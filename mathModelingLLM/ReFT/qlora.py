@@ -43,8 +43,7 @@ class LlmQLoRA:
             device_map=self.device_map,
             quantization_config=self.bnb_config,
             trust_remote_code=True,
-            use_auth_token=True,
-            token=auth_token
+            token=self.auth_token
         )
 
         # Load tokenizer
@@ -53,34 +52,66 @@ class LlmQLoRA:
             trust_remote_code=True,
             padding_side="left",
             use_fast=False,
-            token=auth_token
+            token=self.auth_token
         )
 
         # Set BOS and EOS tokens manually
-        self.tokenizer.add_eos_token = True
-        self.tokenizer.add_bos_token = True
+        self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.peft_model = None
         self.peft_trainer = None
-
+        
     def format_prompts(self, samples: list[dict]):
         """
         Format fields of sample ('instruction', 'output') and format them as string.
-        Adds to the sample 
+        Returns the formatted version ready for fine-tuning 
         """
-        
-        INTRO_BLURB = "Below is an instruction that describes a task. Write a response that appropriately completes the request."
-        INSTRUCTION_KEY = "### Instruct: Generate a math modeling solution for the below question."
-        RESPONSE_KEY = "### Output:"
-        END_KEY = "### End"
-
+        formatted_samples = []
         for sample in samples:
-            input_context = f"{sample['problem']}" if sample["problem"] else None
-            response = f"{RESPONSE_KEY}\n{sample['solution']}"
-            parts = [INTRO_BLURB, INSTRUCTION_KEY, input_context, response, END_KEY]
-            sample["instruction"] = "\n\n".join(part for part in parts if part)
+            # Create instruction text
+            instruction = (
+                "Below is a math modeling problem. Provide a detailed solution.\n\n"
+                f"Problem: {sample['problem']}\n\n"
+                "Solution:"
+            )
+            
+            # Tokenize both instruction and solution together
+            text = f"{instruction}{sample['solution']}{self.tokenizer.eos_token}"
+            
+            tokenized = self.tokenizer(
+                text,
+                truncation=True,
+                max_length=1024,
+                padding="max_length",
+                return_tensors="pt"
+            )
+            
+            formatted_samples.append({
+                "input_ids": tokenized["input_ids"][0],
+                "attention_mask": tokenized["attention_mask"][0],
+                # For causal LM, labels = input_ids
+                "labels": tokenized["input_ids"][0]  
+            })
+    
+        return formatted_samples
 
-        return samples
+    # def format_prompts(self, samples: list[dict]):
+    #     """
+    #     Format fields of sample ('instruction', 'output') and format them as string.
+    #     Adds to the sample 
+    #     """
+    #     INTRO_BLURB = "You are a math modeling expert. Below is context of a math modeling problem. Generate a response that solves this problem and completes the request."
+    #     INSTRUCTION_KEY = "### Instruct: Generate a math modeling solution for the below question."
+    #     RESPONSE_KEY = "### Output:"
+    #     END_KEY = "### End"
+
+    #     for sample in samples:
+    #         input_context = f"{sample['problem']}" if sample["problem"] else None
+    #         response = f"{RESPONSE_KEY}\n{sample['solution']}"
+    #         parts = [INTRO_BLURB, INSTRUCTION_KEY, input_context, response, END_KEY]
+    #         sample["instruction"] = "\n\n".join(part for part in parts if part)
+
+    #     return samples
 
     def prompt_llm(self, text: str):
         model_for_inference = self.peft_model if self.peft_model is not None else self.model
@@ -117,31 +148,77 @@ class LlmQLoRA:
         """
         peft_training_args = TrainingArguments(
             output_dir=output_dir,
-            warmup_steps=1,
-            num_train_epochs=3,
+            remove_unused_columns=False,
+            # Both train and eval batch size should be decreased for Mac (can increase once on GPU)
+            per_device_train_batch_size=1,
+            per_device_eval_batch_size=1,
+            warmup_ratio=0.03,
+            num_train_epochs=1,
+            learning_rate=2e-4,
             logging_dir=os.path.join(training_dir, "logs"),
             save_strategy="epoch",
-            fp16=self.use_cuda,
-            evaluation_strategy="epoch",
-            do_eval=True,
-            report_to="none"
+            eval_strategy="epoch",
+            tf32=False,  # Disable on MPS
+            bf16=False,  # Disable on MPS
+            fp16=True if self.use_cuda else False
+            report_to="none",
+            gradient_accumulation_steps=4,
+            # optim="paged_adamw_8bit" # For CUDA
+            optim="adamw_torch",  # For MPS-compatible
+            gradient_checkpointing=True  # Added to save memory
         )
 
-        self.peft_model.config.use_cache = False
-        data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=self.tokenizer,
+            mlm=False
+        )
 
         self.peft_trainer = Trainer(
             model=self.peft_model,
+            args=peft_training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            args=peft_training_args,
             data_collator=data_collator,
             tokenizer=self.tokenizer
         )
 
         self.peft_trainer.train()
-        self.peft_model.save_pretrained(training_dir)
+        self.peft_model.save_pretrained(output_dir)
+        self.tokenizer.save_pretrained(output_dir)
         print(f"Finished fine-tuning {self.model_name}")
+
+    # def train_peft(self, training_dir, output_dir, train_dataset, eval_dataset):
+        # """
+        # Train the PEFT model on the training data and output to directory
+        # """
+    #     peft_training_args = TrainingArguments(
+    #         output_dir=output_dir,
+    #         remove_unused_columns=False,
+    #         warmup_steps=1,
+    #         num_train_epochs=3,
+    #         logging_dir=os.path.join(training_dir, "logs"),
+    #         save_strategy="epoch",
+    #         fp16=self.use_cuda,
+    #         eval_strategy="epoch",
+    #         do_eval=True,
+    #         report_to="none"
+    #     )
+
+    #     self.peft_model.config.use_cache = False
+    #     data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
+
+    #     self.peft_trainer = Trainer(
+    #         model=self.peft_model,
+    #         train_dataset=train_dataset,
+    #         eval_dataset=eval_dataset,
+    #         args=peft_training_args,
+    #         data_collator=data_collator,
+    #         tokenizer=self.tokenizer
+    #     )
+
+    #     self.peft_trainer.train()
+    #     self.peft_model.save_pretrained(training_dir)
+    #     print(f"Finished fine-tuning {self.model_name}")
 
     def get_inference_model(self):
         model_for_inference = self.peft_model if self.peft_model is not None else self.model
